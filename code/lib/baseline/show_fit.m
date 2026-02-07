@@ -1,0 +1,203 @@
+function show_fit(par,saveOutput)
+% Show fit to data moments.
+
+close all;
+
+if nargin<2
+    saveOutput = false;
+end
+
+% Stationary equilibrium
+p = initialize_inputs;
+p = initialize_parameters(par,p);
+
+st = solve_steady_state(p);
+pn = firmpan(st,p);
+
+if st.flag || pn.flag
+    error('Check equilibrium/simulation.');
+    % Just to double check because
+    % because parameters shouldn't 
+    % be saved in this case.
+end
+
+% Parameters
+parValues = par';
+parNames = {'delta','c1','c2','s','mu','rho_p','sig_p','b'};
+estimPar = table(parValues,'RowNames',parNames);
+
+disp(estimPar);
+
+% Targeted moments specifically
+modm = compute_moments(pn,st,p);
+datm = init_data_moments;
+
+fitMom = table(...
+    select_moments(datm),...
+    select_moments(modm),...
+    'VariableNames',{'Data','Model'});
+
+disp(fitMom);
+
+% Check panel simulations consistent
+checkSimu = table(...
+    [datm.empl_avg;datm.exit_shr],...
+    [modm.empl_avg;modm.exit_shr],...
+    [modm.empl_avg_sim;modm.exit_shr_sim],...
+    'VariableNames',{'Data','Model','SimulatedPanel'},...
+    'RowNames',{'Employment avg.','Exit rate'});
+
+disp(checkSimu);
+
+% Show all computed moments 
+labMom = table(...
+    [datm.UE;datm.EU;datm.EE],...
+    [modm.UE;modm.EU;modm.EE],...
+    'VariableNames',{'Data','Model'},...
+    'RowNames',{'UE','EU','EE'});
+
+disp(labMom);
+
+ardMomNames = {
+    'lpdy_iqr',...
+    'lpdy_idr',...
+    'lpdy_iqr_yng',...
+    'lpdy_idr_yng',...
+    'lwag_iqr',...
+    'lwag_idr',...
+    'lpdy_avg_diff',...
+    'beta_dlemp_lnp',...
+    'beta_lnw_lnp'};
+
+ardMom = table(...
+    stack_ard(datm),...
+    stack_ard(modm),...
+    'VariableNames',{'Data','Model'},...
+    'RowNames',ardMomNames);
+
+disp(ardMom);
+
+% Distributions by firm age. 
+age_max = length(datm.firm_age.age);
+
+empl_tot = sum(pn.emp(pn.active));
+firm_tot = sum(pn.active(:)); 
+
+empl_age = zeros(age_max,1);
+firm_age = zeros(age_max,1);
+
+for k = 1:age_max
+    empl_age(k) = sum(pn.emp(pn.active(:,k),k));
+    firm_age(k) = sum(pn.active(:,k));
+end
+
+modm.empl_shr_age = empl_age/empl_tot;
+modm.firm_shr_age = firm_age/firm_tot;
+
+firm_age_empl_shr = plot_fit_bars(...
+    datm.firm_age.age,...
+    [modm.empl_shr_age datm.firm_age.empl_shr],...
+    'Firm age','Employment share');
+
+firm_age_firm_shr = plot_fit_bars(...
+    datm.firm_age.age,...
+    [modm.firm_shr_age datm.firm_age.firm_shr],...
+    'Firm age','Firm share');
+
+% Firm-size distribution
+acti = pn.active(:);
+empl = pn.emp(acti);
+empl = empl/mean(empl); % define normalized employment
+[ecdfEmpl,normEmpl] = ecdf(empl);
+ecdfEmpl = ecdfEmpl(2:end-1);
+normEmpl = normEmpl(2:end-1);
+compEcdfEmpl = 1 - ecdfEmpl;
+
+firm_size_ccdf = figure;
+trimSmall = normEmpl>=10^(-3); % trim smallest firms for plot 
+loglog(normEmpl(trimSmall),compEcdfEmpl(trimSmall),'b.');
+hold on;
+loglog(datm.firm_size.rela_size,datm.firm_size.tail_prob,...
+    'ks','MarkerFaceColor','k','MarkerEdgeColor','k');
+hold off;
+xlabel('Employment (normalized by average employment)');
+ylabel('Complementary CDF');
+legend('Model','Data','Location','best');
+
+X = log(normEmpl(normEmpl>=1));
+y = log(compEcdfEmpl(normEmpl>=1));
+b = regress(y,[ones(size(X)) X]);
+
+modm.firm_size_coeff = -b(2);
+
+bsdMomNames = {
+    'empl_avg',...
+    'empl_shr_yng',...
+    'firm_shr_yng',...
+    'exit_shr_yng',...
+    'exit_shr',...
+    'lpdy_acl',...
+    'lemp_acl',...
+    'jdst_shr_exit',...
+    'firm_size_coeff'};
+
+bsdMom = table(...
+    stack_bsd(datm),...
+    stack_bsd(modm),...
+    'VariableNames',{'Data','Model'},...
+    'RowNames',bsdMomNames);
+
+disp(bsdMom); 
+
+if saveOutput
+    
+    saveas(firm_size_ccdf,'../figs/fit_firmsize_ccdf','epsc');
+    saveas(firm_age_empl_shr,'../figs/fit_firm_age_empl_shr','epsc');
+    saveas(firm_age_firm_shr,'../figs/fit_firm_age_empl_shr','epsc');
+    
+    wbName = '../tables/_make_tables.xlsx';
+
+    writetable(estimPar,wbName,'Sheet','raw_parameters','WriteRowNames',1);
+    writetable(labMom,wbName,'Sheet','raw_fit_lab','WriteRowNames',1);
+    writetable(ardMom,wbName,'Sheet','raw_fit_ard','WriteRowNames',1);
+    writetable(bsdMom,wbName,'Sheet','raw_fit_bsd','WriteRowNames',1);
+    
+end
+
+function mv = stack_bsd(m)
+
+mv = [...
+    m.empl_avg;...
+    m.empl_shr_yng;...
+    m.firm_shr_yng;...
+    m.exit_shr_yng;...
+    m.exit_shr;...
+    m.lpdy_acl;...
+    m.lemp_acl;...
+    m.jdst_shr_exit;...
+    m.firm_size_coeff];
+
+function mv = stack_ard(m)
+
+mv = [...
+    m.lpdy_iqr;...
+    m.lpdy_idr;...
+    m.lpdy_iqr_yng;...
+    m.lpdy_idr_yng;...
+    m.lwag_iqr;...
+    m.lwag_idr;...
+    m.lpdy_avg_diff;...
+    m.beta_dlemp_lnp;...
+    m.beta_lnw_lnp];
+
+
+function f = plot_fit_bars(xAxis,series,xLab,yLab)
+% Wrapper around bar function to display model fit
+
+f = figure;
+bar(xAxis,series);
+xlabel(xLab);
+ylabel(yLab);
+
+legend('Model','Data','Location','Best');
+        
