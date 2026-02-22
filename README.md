@@ -1,17 +1,18 @@
 # Firm Dynamics and Random Search over the Business Cycle
 
-This is the replication package for my paper "Firm Dynamics and Random Search over the Business Cycle" published in the _Journal of Monetary Economics_.
+This is the replication package for my paper "Firm Dynamics and Random Search over the Business Cycle" published in the _Journal of Monetary Economics_ [[doi](https://doi.org/10.1016/j.jmoneco.2026.103902)].
 
 If you find this package helpful in your work, please consider citing the paper:
 
 ```
 @article{audoly2026firm,
-  title={Firm Dynamics and Random Search over the Business Cycle},
-  author={Audoly, Richard},
-  journal={Journal of Monetary Economics},
-  doi = {https://doi.org/10.1016/j.jmoneco.2026.103902},
-  year={Forthcoming},
-  publisher={Elsevier}
+  author  = {Audoly, Richard},
+  title   = {{Firm Dynamics and Random Search over the Business Cycle}},
+  journal = {Journal of Monetary Economics},
+  volume  = {158},
+  pages   = {103902},
+  year    = {2026},
+  doi     = {10.1016/j.jmoneco.2026.103902}
 }
 ```
 
@@ -205,3 +206,4 @@ These files are created under `tables/`:
 - `tab1.txt`
 - `tab2.txt`
 - `tab3.txt`
+
